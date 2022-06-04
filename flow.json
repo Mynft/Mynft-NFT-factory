@@ -6,6 +6,13 @@
     }
   },
   "contracts": {
+    "ExampleNFT": "./cadence/contracts/ExampleNFT.cdc",
+    "MetadataViews": {
+      "source": "./cadence/contracts/standard/MetadataViews.cdc",
+      "aliases": {
+        "testnet": "0x631e88ae7f1d7c20"
+      }
+    },
     "NonFungibleToken": {
       "source": "./cadence/contracts/standard/NonFungibleToken.cdc",
       "aliases": {
@@ -80,7 +87,9 @@
       "emulator-account": [
         "NonFungibleToken",
         "Kibble",
-        "FUSD"
+        "FUSD",
+        "MetadataViews",
+        "ExampleNFT"
       ],
       "test1": [],
       "test2": []

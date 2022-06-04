@@ -20,7 +20,7 @@ pub contract ExampleNFT: NonFungibleToken {
   pub event Withdraw(id: UInt64, from: Address?)
   pub event Deposit(id: UInt64, to: Address?)
   pub event TokenMinted(id: UInt64, to: Address?)
-  pub event TokenMintedByGrant(id: UInt64, to: Address? , minter?: Address)
+  pub event TokenMintedByGrant(id: UInt64, to: Address? , minter: Address?)
 
   pub let CollectionStoragePath: StoragePath
   pub let CollectionPublicPath: PublicPath
@@ -46,6 +46,7 @@ pub contract ExampleNFT: NonFungibleToken {
       // - image/svg+xml
       // - video/mp4
       // - audio/mpeg
+      // - application/json
       pub let mediaType: String
 
       // mediaHash: dstorage storage hash
@@ -58,8 +59,10 @@ pub contract ExampleNFT: NonFungibleToken {
 
       pub let royalties: [MetadataViews.Royalty]
 
+      pub let props: {String: String}
 
-      init(name: String, description: String, mediaType: String, mediaHash: String, baseURI: String, thumbnail: String, max: UInt64, royalties: [MetadataViews.Royalty]) {
+
+      init(name: String, description: String, mediaType: String, mediaHash: String, baseURI: String, thumbnail: String, max: UInt64, royalties: [MetadataViews.Royalty], props: {String: String}) {
           self.name = name
           self.description = description
           self.mediaType = mediaType
@@ -68,6 +71,7 @@ pub contract ExampleNFT: NonFungibleToken {
           self.thumbnail = thumbnail
           self.max = max
           self.royalties = royalties
+          self.props = props
       }
   }
 
@@ -84,6 +88,8 @@ pub contract ExampleNFT: NonFungibleToken {
       // edition number
       pub let number: UInt64
       pub let mediaHash: String
+      
+      priv var props: {String: String}
 
 
       access(self) let royalties: [MetadataViews.Royalty]
@@ -97,7 +103,8 @@ pub contract ExampleNFT: NonFungibleToken {
           mediaType: String,
           royalties: [MetadataViews.Royalty],
           typeId: UInt64,
-          number: UInt64
+          number: UInt64,
+          props: {String: String}
       ) {
           self.id = id
           self.name = name
@@ -108,10 +115,15 @@ pub contract ExampleNFT: NonFungibleToken {
           self.royalties = royalties
           self.typeId = typeId
           self.number = number
+          self.props = props
       }
 
       pub fun getMetadata(): Metadata? {
         return ExampleNFT.predefinedMetadata[self.typeId]
+      }
+
+      pub fun getProps(): {String: String}? {
+        return self.props
       }
   
       pub fun getViews(): [Type] {
@@ -211,6 +223,7 @@ pub contract ExampleNFT: NonFungibleToken {
                   }
               )
           }
+          // default return todo detail
           return nil
       }
   }
@@ -319,6 +332,7 @@ pub contract ExampleNFT: NonFungibleToken {
       mediaType: String,
       royalties: [MetadataViews.Royalty],
       typeId: UInt64,
+      props: {String: String}
     )
 
     pub fun checkAccess(certificate: &{ICertificate}): Bool
@@ -344,6 +358,7 @@ pub contract ExampleNFT: NonFungibleToken {
           mediaType: String,
           royalties: [MetadataViews.Royalty],
           typeId: UInt64,
+          props: {String: String}
       ) {
           var NFTNum: UInt64 = 0
 
@@ -371,7 +386,8 @@ pub contract ExampleNFT: NonFungibleToken {
             mediaType: mediaType,
             royalties: royalties,
             typeId: typeId,
-            number: NFTNum
+            number: NFTNum,
+            props: props
           )
 
           // deposit it in the recipient's account using their reference
@@ -412,7 +428,8 @@ pub contract ExampleNFT: NonFungibleToken {
               mediaHash: metadata.mediaHash,
               mediaType: metadata.mediaType,
               royalties: metadata.royalties,
-              typeId: typeId
+              typeId: typeId,
+              props: metadata.props
             )
             index = index + 1
           }
@@ -450,8 +467,9 @@ pub contract ExampleNFT: NonFungibleToken {
       mediaType: String,
       royalties: [MetadataViews.Royalty],
       typeId: UInt64,
+      props: {String: String}
     ) {
-      self.mintNFT(recipient: recipient, name: name, description: description, thumbnail: thumbnail, mediaHash: mediaHash, mediaType: mediaType, royalties: royalties, typeId: typeId)
+      self.mintNFT(recipient: recipient, name: name, description: description, thumbnail: thumbnail, mediaHash: mediaHash, mediaType: mediaType, royalties: royalties, typeId: typeId, props: props)
       emit TokenMintedByGrant(id: ExampleNFT.totalSupply -1, to: recipient.owner?.address, minter: certificate.owner?.address)
     }
 
