@@ -46,6 +46,7 @@ pub contract ExampleNFT: NonFungibleToken {
       // - image/svg+xml
       // - video/mp4
       // - audio/mpeg
+      // - application/json
       pub let mediaType: String
 
       // mediaHash: dstorage storage hash
