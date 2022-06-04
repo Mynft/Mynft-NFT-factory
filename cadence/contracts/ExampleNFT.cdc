@@ -20,7 +20,7 @@ pub contract ExampleNFT: NonFungibleToken {
   pub event Withdraw(id: UInt64, from: Address?)
   pub event Deposit(id: UInt64, to: Address?)
   pub event TokenMinted(id: UInt64, to: Address?)
-  pub event TokenMintedByGrant(id: UInt64, to: Address? , minter?: Address)
+  pub event TokenMintedByGrant(id: UInt64, to: Address? , minter: Address?)
 
   pub let CollectionStoragePath: StoragePath
   pub let CollectionPublicPath: PublicPath
@@ -427,7 +427,8 @@ pub contract ExampleNFT: NonFungibleToken {
               mediaHash: metadata.mediaHash,
               mediaType: metadata.mediaType,
               royalties: metadata.royalties,
-              typeId: typeId
+              typeId: typeId,
+              props: metadata.props
             )
             index = index + 1
           }
