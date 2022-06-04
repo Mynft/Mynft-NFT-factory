@@ -6,6 +6,7 @@
     }
   },
   "contracts": {
+    "NFTContract": "./cadence/contracts/NFTContract.cdc",
     "NonFungibleToken": {
       "source": "./cadence/contracts/standard/NonFungibleToken.cdc",
       "aliases": {
