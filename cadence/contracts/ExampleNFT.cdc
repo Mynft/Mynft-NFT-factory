@@ -142,23 +142,38 @@ pub contract ExampleNFT: NonFungibleToken {
         switch view {
           case Type<MetadataViews.Display>():
             var thumbnail = self.thumbnail
-              return MetadataViews.Display(
-                name: self.name,
-                description: self.description,
-                thumbnail: MetadataViews.HTTPFile(
-                  url: self.thumbnail
-                )
+            if self.typeId > 0 {
+              let metadata = self.getMetadata()!
+              if metadata.thumbnail != "" {
+                thumbnail = metadata.thumbnail
+              } 
+            }
+            return MetadataViews.Display(
+              name: self.name,
+              description: self.description,
+              thumbnail: MetadataViews.HTTPFile(
+                url: thumbnail
               )
-          case Type<MetadataViews.Editions>():
-            let metadata = self.getMetadata()!
-            // There is no max number of NFTs that can be minted from this contract
-            // so the max edition field value is set to nil
-            let editionInfo = MetadataViews.Edition(name: metadata.name, number: self.number, max: metadata.max)
-            let editionList: [MetadataViews.Edition] = [editionInfo]
-            return MetadataViews.Editions(
-              editionList
             )
+          case Type<MetadataViews.Editions>():
+            let metadata = self.getMetadata()
+            if metadata == nil {
+              return nil
+            } else {
+              // There is no max number of NFTs that can be minted from this contract
+              // so the max edition field value is set to nil
+              let editionInfo = MetadataViews.Edition(name: metadata!.name, number: self.number, max: metadata!.max)
+              let editionList: [MetadataViews.Edition] = [editionInfo]
+              return MetadataViews.Editions(
+                editionList
+              )
+            }
           case Type<MetadataViews.Serial>():
+            if self.typeId > 0 {
+              return MetadataViews.Serial(
+                self.number
+              )
+            }
             return MetadataViews.Serial(
               self.id
             )
@@ -166,7 +181,7 @@ pub contract ExampleNFT: NonFungibleToken {
             var royalties = self.royalties
             if self.typeId > 0 {
             let metadata = self.getMetadata()!
-            if metadata.baseURI != "" {
+            if metadata.royalties.length > 0 {
               royalties = metadata.royalties
             }
           }
@@ -175,21 +190,31 @@ pub contract ExampleNFT: NonFungibleToken {
             )
           case Type<MetadataViews.ExternalURL>():
             var uri = ExampleNFT.baseURI
+            var identifier = self.id.toString()
             if self.typeId > 0 {
               let metadata = self.getMetadata()!
               if metadata.baseURI != "" {
                 uri = metadata.baseURI
               }
+              if metadata.mediaHash != "" {
+                identifier = metadata.mediaHash
+              } else {
+                identifier = self.typeId.toString()
+              }
+            } else {
+              if self.mediaHash != "" {
+                identifier = self.mediaHash
+              } 
             }
-            return MetadataViews.ExternalURL(uri.concat(self.mediaHash))
+            return MetadataViews.ExternalURL(uri.concat(identifier))
           case Type<MetadataViews.NFTCollectionData>():
               return MetadataViews.NFTCollectionData(
                   storagePath: ExampleNFT.CollectionStoragePath,
                   publicPath: ExampleNFT.CollectionPublicPath,
                   providerPath: /private/exampleNFTCollection,
-                  publicCollection: Type<&ExampleNFT.Collection{ExampleNFT.ExampleNFTCollectionPublic}>(),
-                  publicLinkedType: Type<&ExampleNFT.Collection{ExampleNFT.ExampleNFTCollectionPublic,NonFungibleToken.CollectionPublic,NonFungibleToken.Receiver,MetadataViews.ResolverCollection}>(),
-                  providerLinkedType: Type<&ExampleNFT.Collection{ExampleNFT.ExampleNFTCollectionPublic,NonFungibleToken.CollectionPublic,NonFungibleToken.Provider,MetadataViews.ResolverCollection}>(),
+                  publicCollection: Type<&ExampleNFT.Collection{ExampleNFT.CollectionPublic}>(),
+                  publicLinkedType: Type<&ExampleNFT.Collection{ExampleNFT.CollectionPublic,NonFungibleToken.CollectionPublic,NonFungibleToken.Receiver,MetadataViews.ResolverCollection}>(),
+                  providerLinkedType: Type<&ExampleNFT.Collection{ExampleNFT.CollectionPublic,NonFungibleToken.CollectionPublic,NonFungibleToken.Provider,MetadataViews.ResolverCollection}>(),
                   createEmptyCollectionFunction: (fun (): @NonFungibleToken.Collection {
                       return <-ExampleNFT.createEmptyCollection()
                   })
@@ -202,8 +227,10 @@ pub contract ExampleNFT: NonFungibleToken {
                 let metadata = self.getMetadata()!
                 if metadata.baseURI != "" {
                   uri = metadata.baseURI.concat(metadata.mediaHash)
+                }// todo
+                if metadata.mediaType !="" {
+                  mediaType = metadata.mediaType
                 }
-                mediaType = metadata.mediaType
               }
               let media = MetadataViews.Media(
                   file: MetadataViews.HTTPFile(
@@ -228,7 +255,7 @@ pub contract ExampleNFT: NonFungibleToken {
       }
   }
 
-  pub resource interface ExampleNFTCollectionPublic {
+  pub resource interface CollectionPublic {
     pub fun deposit(token: @NonFungibleToken.NFT)
     pub fun getIDs(): [UInt64]
     pub fun borrowNFT(id: UInt64): &NonFungibleToken.NFT
@@ -240,7 +267,7 @@ pub contract ExampleNFT: NonFungibleToken {
     }
   }
 
-  pub resource Collection: ExampleNFTCollectionPublic, NonFungibleToken.Provider, NonFungibleToken.Receiver, NonFungibleToken.CollectionPublic, MetadataViews.ResolverCollection {
+  pub resource Collection: CollectionPublic, NonFungibleToken.Provider, NonFungibleToken.Receiver, NonFungibleToken.CollectionPublic, MetadataViews.ResolverCollection {
       // dictionary of NFT conforming tokens
       // NFT is a resource type with an `UInt64` ID field
       pub var ownedNFTs: @{UInt64: NonFungibleToken.NFT}
@@ -530,17 +557,17 @@ pub contract ExampleNFT: NonFungibleToken {
     self.account.save(<-collection, to: self.CollectionStoragePath)
 
     // create a public capability for the collection
-    self.account.link<&ExampleNFT.Collection{NonFungibleToken.CollectionPublic, ExampleNFT.ExampleNFTCollectionPublic, MetadataViews.ResolverCollection}>(
-        self.CollectionPublicPath,
-        target: self.CollectionStoragePath
+    self.account.link<&ExampleNFT.Collection{NonFungibleToken.CollectionPublic, ExampleNFT.CollectionPublic, MetadataViews.ResolverCollection}>(
+      self.CollectionPublicPath,
+      target: self.CollectionStoragePath
     )
 
     // Create a Minter resource and save it to storage
     let minter <- create NFTMinter()
     self.account.save(<-minter, to: self.MinterStoragePath)
     self.account.link<&ExampleNFT.NFTMinter{MinterPublic}>(
-        self.MinterPublicPath,
-        target: self.MinterStoragePath
+      self.MinterPublicPath,
+      target: self.MinterStoragePath
     )
 
     emit ContractInitialized()
