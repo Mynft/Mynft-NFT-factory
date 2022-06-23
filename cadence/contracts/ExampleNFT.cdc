@@ -29,7 +29,7 @@ pub contract ExampleNFT: NonFungibleToken {
   pub let CertificateStoragePath: StoragePath
 
   // metadata map for multi editions
-  access(contract) var predefinedMetadata: {UInt64: Metadata}
+  access(contract) var predefinedMetadata: {UInt64: {String: AnyStruct}}
   // multi edition count for metadata
   access(contract) var supplyOfTypes: {UInt64: UInt64}
 
@@ -59,10 +59,10 @@ pub contract ExampleNFT: NonFungibleToken {
 
       pub let royalties: [MetadataViews.Royalty]
 
-      pub let props: {String: String}
+      pub let props: {String: AnyStruct}
 
 
-      init(name: String, description: String, mediaType: String, mediaHash: String, baseURI: String, thumbnail: String, max: UInt64, royalties: [MetadataViews.Royalty], props: {String: String}) {
+      init(name: String, description: String, mediaType: String, mediaHash: String, baseURI: String, thumbnail: String, max: UInt64, royalties: [MetadataViews.Royalty], props: {String: AnyStruct}) {
           self.name = name
           self.description = description
           self.mediaType = mediaType
@@ -89,7 +89,7 @@ pub contract ExampleNFT: NonFungibleToken {
       pub let number: UInt64
       pub let mediaHash: String
       
-      priv var props: {String: String}
+      priv var metadata: {String: AnyStruct}
 
 
       access(self) let royalties: [MetadataViews.Royalty]
@@ -104,7 +104,7 @@ pub contract ExampleNFT: NonFungibleToken {
           royalties: [MetadataViews.Royalty],
           typeId: UInt64,
           number: UInt64,
-          props: {String: String}
+          metadata: {String: AnyStruct}
       ) {
           self.id = id
           self.name = name
@@ -115,15 +115,15 @@ pub contract ExampleNFT: NonFungibleToken {
           self.royalties = royalties
           self.typeId = typeId
           self.number = number
-          self.props = props
+          self.metadata = metadata
       }
 
-      pub fun getMetadata(): Metadata? {
+      pub fun getMetadata(): {String: AnyStruct}? {
         return ExampleNFT.predefinedMetadata[self.typeId]
       }
 
-      pub fun getProps(): {String: String}? {
-        return self.props
+      pub fun getNftMetadata(): {String: AnyStruct}? {
+        return self.metadata
       }
   
       pub fun getViews(): [Type] {
@@ -144,8 +144,9 @@ pub contract ExampleNFT: NonFungibleToken {
             var thumbnail = self.thumbnail
             if self.typeId > 0 {
               let metadata = self.getMetadata()!
-              if metadata.thumbnail != "" {
-                thumbnail = metadata.thumbnail
+              thumbnail = metadata["thumbnail"] as! String
+              if thumbnail != "" {
+                thumbnail = thumbnail
               } 
             }
             return MetadataViews.Display(
@@ -162,7 +163,7 @@ pub contract ExampleNFT: NonFungibleToken {
             } else {
               // There is no max number of NFTs that can be minted from this contract
               // so the max edition field value is set to nil
-              let editionInfo = MetadataViews.Edition(name: metadata!.name, number: self.number, max: metadata!.max)
+              let editionInfo = MetadataViews.Edition(name: metadata!["name"] as! String, number: self.number, max: metadata!["max"] as! UInt64)
               let editionList: [MetadataViews.Edition] = [editionInfo]
               return MetadataViews.Editions(
                 editionList
@@ -181,8 +182,9 @@ pub contract ExampleNFT: NonFungibleToken {
             var royalties = self.royalties
             if self.typeId > 0 {
             let metadata = self.getMetadata()!
-            if metadata.royalties.length > 0 {
-              royalties = metadata.royalties
+            royalties = metadata["royalties"] as! [MetadataViews.Royalty]
+            if royalties.length > 0 {
+              royalties = royalties
             }
           }
             return MetadataViews.Royalties(
@@ -193,11 +195,13 @@ pub contract ExampleNFT: NonFungibleToken {
             var identifier = self.id.toString()
             if self.typeId > 0 {
               let metadata = self.getMetadata()!
-              if metadata.baseURI != "" {
-                uri = metadata.baseURI
+              let baseURI = metadata["baseURI"] as! String
+              if baseURI != "" {
+                uri = baseURI
               }
-              if metadata.mediaHash != "" {
-                identifier = metadata.mediaHash
+              let mediaHash = metadata["mediaHash"] as! String
+              if mediaHash != "" {
+                identifier = mediaHash
               } else {
                 identifier = self.typeId.toString()
               }
@@ -225,11 +229,13 @@ pub contract ExampleNFT: NonFungibleToken {
               var mediaType = self.mediaType
               if self.typeId > 0 {
                 let metadata = self.getMetadata()!
-                if metadata.baseURI != "" {
-                  uri = metadata.baseURI.concat(metadata.mediaHash)
-                }// todo
-                if metadata.mediaType !="" {
-                  mediaType = metadata.mediaType
+                let baseURI = metadata["baseURI"] as! String
+                if baseURI != "" {
+                  uri = baseURI.concat(metadata["mediaHash"] as! String)
+                }
+                mediaType = metadata["mediaType"] as! String
+                if mediaType !="" {
+                  mediaType = mediaType
                 }
               }
               let media = MetadataViews.Media(
@@ -240,15 +246,36 @@ pub contract ExampleNFT: NonFungibleToken {
               )
               // todo fill out info with params
               return MetadataViews.NFTCollectionDisplay(
-                  name: "The Example Collection",
-                  description: "This collection is used as an example to help you develop your next Flow NFT.",
-                  externalURL: MetadataViews.ExternalURL("https://example-nft.onflow.org"),
+                  name: "The Example Collection", // params
+                  description: "This collection is used as an example to help you develop your next Flow NFT.", // params
+                  externalURL: MetadataViews.ExternalURL("https://example-nft.onflow.org"), // params
                   squareImage: media,
                   bannerImage: media,
                   socials: {
-                      "twitter": MetadataViews.ExternalURL("https://twitter.com/flow_blockchain")
+                      "twitter": MetadataViews.ExternalURL("https://twitter.com/flow_blockchain") // params
                   }
               )
+              case Type<MetadataViews.Traits>():
+
+                  var metadata = self.metadata
+
+                  if self.typeId > 0 {
+                    metadata = ExampleNFT.predefinedMetadata[self.typeId]!
+                  }
+                  // exclude mintedTime and foo to show other uses of Traits
+                  let excludedTraits = ["mintedTime"]
+                  let traitsView = MetadataViews.dictToTraits(dict: metadata, excludedNames: excludedTraits)
+
+                  // mintedTime is a unix timestamp, we should mark it with a displayType so platforms know how to show it.
+                  let mintedTimeTrait = MetadataViews.Trait(name: "mintedTime", value: self.metadata["mintedTime"]!, displayType: "Date", rarity: nil)
+                  traitsView.addTrait(mintedTimeTrait)
+
+                  // foo is a trait with its own rarity
+                  // let fooTraitRarity = MetadataViews.Rarity(score: 10.0, max: 100.0, description: "Common")
+                  // let fooTrait = MetadataViews.Trait(name: "foo", value: self.metadata["foo"], displayType: nil, rarity: fooTraitRarity)
+                  // traitsView.addTrait(fooTrait)
+                  
+                  return traitsView
           }
           // default return todo detail
           return nil
@@ -359,7 +386,7 @@ pub contract ExampleNFT: NonFungibleToken {
       mediaType: String,
       royalties: [MetadataViews.Royalty],
       typeId: UInt64,
-      props: {String: String}
+      metadata: {String: AnyStruct}
     )
 
     pub fun checkAccess(certificate: &{ICertificate}): Bool
@@ -385,14 +412,15 @@ pub contract ExampleNFT: NonFungibleToken {
           mediaType: String,
           royalties: [MetadataViews.Royalty],
           typeId: UInt64,
-          props: {String: String}
+          metadata: {String: AnyStruct}
       ) {
           var NFTNum: UInt64 = 0
 
           if typeId != nil && typeId > 0 {
             let metadata = ExampleNFT.predefinedMetadata[typeId]!
             let typeSupply = ExampleNFT.supplyOfTypes[typeId]
-            if typeSupply == metadata.max {
+          
+            if typeSupply == metadata["max"] as! UInt64 {
               panic("Edition number reach max with typeId: ".concat(typeId.toString()))
             }
             if typeSupply == nil {
@@ -414,7 +442,7 @@ pub contract ExampleNFT: NonFungibleToken {
             royalties: royalties,
             typeId: typeId,
             number: NFTNum,
-            props: props
+            metadata: metadata
           )
 
           // deposit it in the recipient's account using their reference
@@ -427,10 +455,11 @@ pub contract ExampleNFT: NonFungibleToken {
       // UpdateMetadata
       // Update metadata for a typeId
       //
-      pub fun updateMetadata(typeId: UInt64, metadata: Metadata) {
+      pub fun updateMetadata(typeId: UInt64, metadata: {String: AnyStruct}) {
         let currentSupply = ExampleNFT.supplyOfTypes[typeId]
         if currentSupply != nil && currentSupply! > 0 {
-          assert(currentSupply! <= metadata.max, message: "Can not set max lower than supply")
+          let max = metadata["max"] as! UInt64
+          assert(currentSupply! <= max, message: "Can not set max lower than supply")
         }
         ExampleNFT.predefinedMetadata[typeId] = metadata
       }
@@ -449,14 +478,14 @@ pub contract ExampleNFT: NonFungibleToken {
           while index < count {
             self.mintNFT(
               recipient: recipient,
-              name: metadata.name,
-              description: metadata.description,
-              thumbnail: metadata.thumbnail,
-              mediaHash: metadata.mediaHash,
-              mediaType: metadata.mediaType,
-              royalties: metadata.royalties,
+              name: metadata["name"] as! String,
+              description: metadata["description"] as! String,
+              thumbnail: metadata["thumbnail"] as! String,
+              mediaHash: metadata["mediaHash"] as! String,
+              mediaType: metadata["mediaType"] as! String,
+              royalties: metadata["royalties"] as! [MetadataViews.Royalty],
               typeId: typeId,
-              props: metadata.props
+              metadata: {}
             )
             index = index + 1
           }
@@ -494,9 +523,9 @@ pub contract ExampleNFT: NonFungibleToken {
       mediaType: String,
       royalties: [MetadataViews.Royalty],
       typeId: UInt64,
-      props: {String: String}
+      metadata: {String: AnyStruct}
     ) {
-      self.mintNFT(recipient: recipient, name: name, description: description, thumbnail: thumbnail, mediaHash: mediaHash, mediaType: mediaType, royalties: royalties, typeId: typeId, props: props)
+      self.mintNFT(recipient: recipient, name: name, description: description, thumbnail: thumbnail, mediaHash: mediaHash, mediaType: mediaType, royalties: royalties, typeId: typeId, metadata: metadata)
       emit TokenMintedByGrant(id: ExampleNFT.totalSupply -1, to: recipient.owner?.address, minter: certificate.owner?.address)
     }
 
@@ -527,7 +556,7 @@ pub contract ExampleNFT: NonFungibleToken {
   // getMetadata
   // Get the metadata for a specific type of SeeDAONFT
   //
-  pub fun getMetadata(typeId: UInt64): Metadata? {
+  pub fun getMetadata(typeId: UInt64): {String: AnyStruct}? {
       return ExampleNFT.predefinedMetadata[typeId]
   }
 
