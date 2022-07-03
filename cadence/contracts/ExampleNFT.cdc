@@ -35,47 +35,6 @@ pub contract ExampleNFT: NonFungibleToken {
 
   access(contract) var baseURI: String
 
-  // Metadata for multi edition
-  pub struct Metadata {
-      pub let name: String
-      pub let description: String
-
-      // mediaType: MIME type of the media
-      // - image/png
-      // - image/jpeg
-      // - image/svg+xml
-      // - video/mp4
-      // - audio/mpeg
-      // - application/json
-      pub let mediaType: String
-
-      // mediaHash: dstorage storage hash
-      pub let mediaHash: String
-      pub let thumbnail: String
-
-      pub let baseURI: String
-
-      pub let max: UInt64
-
-      pub let royalties: [MetadataViews.Royalty]
-
-      pub let props: {String: AnyStruct}
-
-
-      init(name: String, description: String, mediaType: String, mediaHash: String, baseURI: String, thumbnail: String, max: UInt64, royalties: [MetadataViews.Royalty], props: {String: AnyStruct}) {
-          self.name = name
-          self.description = description
-          self.mediaType = mediaType
-          self.mediaHash = mediaHash
-          self.baseURI = baseURI
-          self.thumbnail = thumbnail
-          self.max = max
-          self.royalties = royalties
-          self.props = props
-      }
-  }
-
-
   pub resource NFT: NonFungibleToken.INFT, MetadataViews.Resolver {
       pub let id: UInt64
 
@@ -144,7 +103,8 @@ pub contract ExampleNFT: NonFungibleToken {
             var thumbnail = self.thumbnail
             if self.typeId > 0 {
               let metadata = self.getMetadata()!
-              thumbnail = metadata["thumbnail"] as! String
+              thumbnail = (metadata["thumbnail"] as? String)!
+
               if thumbnail != "" {
                 thumbnail = thumbnail
               } 
@@ -157,13 +117,16 @@ pub contract ExampleNFT: NonFungibleToken {
               )
             )
           case Type<MetadataViews.Editions>():
-            let metadata = self.getMetadata()
+            let metadata = self.getMetadata()!
             if metadata == nil {
               return nil
             } else {
               // There is no max number of NFTs that can be minted from this contract
               // so the max edition field value is set to nil
-              let editionInfo = MetadataViews.Edition(name: metadata!["name"] as! String, number: self.number, max: metadata!["max"] as! UInt64)
+              let number = (self.metadata["number"] as? UInt64)!
+              let max = (metadata["max"] as? UInt64?)!
+              let name = (metadata["name"] as? String?)!
+              let editionInfo = MetadataViews.Edition(name: name, number: number, max: max)
               let editionList: [MetadataViews.Edition] = [editionInfo]
               return MetadataViews.Editions(
                 editionList
@@ -182,7 +145,7 @@ pub contract ExampleNFT: NonFungibleToken {
             var royalties = self.royalties
             if self.typeId > 0 {
             let metadata = self.getMetadata()!
-            royalties = metadata["royalties"] as! [MetadataViews.Royalty]
+            royalties = (metadata["royalties"] as? [MetadataViews.Royalty])! 
             if royalties.length > 0 {
               royalties = royalties
             }
@@ -195,11 +158,12 @@ pub contract ExampleNFT: NonFungibleToken {
             var identifier = self.id.toString()
             if self.typeId > 0 {
               let metadata = self.getMetadata()!
-              let baseURI = metadata["baseURI"] as! String
+              let baseURI = (metadata["baseURI"] as? String)!
+
               if baseURI != "" {
                 uri = baseURI
               }
-              let mediaHash = metadata["mediaHash"] as! String
+              let mediaHash = (metadata["mediaHash"] as? String)!
               if mediaHash != "" {
                 identifier = mediaHash
               } else {
@@ -229,11 +193,13 @@ pub contract ExampleNFT: NonFungibleToken {
               var mediaType = self.mediaType
               if self.typeId > 0 {
                 let metadata = self.getMetadata()!
-                let baseURI = metadata["baseURI"] as! String
+                let baseURI = (metadata["baseURI"] as? String!)
+                let mediaHash = (metadata["mediaHash"] as? String!)
                 if baseURI != "" {
-                  uri = baseURI.concat(metadata["mediaHash"] as! String)
+                  uri = baseURI.concat(mediaHash)
                 }
-                mediaType = metadata["mediaType"] as! String
+
+                mediaType = (metadata["mediaType"] as? String!)
                 if mediaType !="" {
                   mediaType = mediaType
                 }
@@ -414,22 +380,29 @@ pub contract ExampleNFT: NonFungibleToken {
           typeId: UInt64,
           metadata: {String: AnyStruct}
       ) {
+          let currentBlock = getCurrentBlock()
+          metadata["mintedBlock"] = currentBlock.height
+          metadata["mintedTime"] = currentBlock.timestamp
+          metadata["minter"] = recipient.owner!.address
           var NFTNum: UInt64 = 0
 
           if typeId != nil && typeId > 0 {
-            let metadata = ExampleNFT.predefinedMetadata[typeId]!
-            let typeSupply = ExampleNFT.supplyOfTypes[typeId]
-          
-            if typeSupply == metadata["max"] as! UInt64 {
+            let preMetadata = ExampleNFT.predefinedMetadata[typeId]!
+            let typeSupply = ExampleNFT.supplyOfTypes[typeId] ?? 0
+
+            let max = (preMetadata["max"] as? UInt64?)!
+
+            if typeSupply == max! {
               panic("Edition number reach max with typeId: ".concat(typeId.toString()))
             }
-            if typeSupply == nil {
+            if typeSupply == 0 {
               ExampleNFT.supplyOfTypes[typeId] = 1
               NFTNum = 1
             } else {
               ExampleNFT.supplyOfTypes[typeId] = typeSupply! + (1 as UInt64)
               NFTNum = typeSupply!
             }
+            metadata["number"] = NFTNum
           }
             // create a new NFT
           var newNFT <- create NFT(
@@ -458,13 +431,13 @@ pub contract ExampleNFT: NonFungibleToken {
       pub fun updateMetadata(typeId: UInt64, metadata: {String: AnyStruct}) {
         let currentSupply = ExampleNFT.supplyOfTypes[typeId]
         if currentSupply != nil && currentSupply! > 0 {
-          let max = metadata["max"] as! UInt64
+          let max = (metadata["max"] as? UInt64)!
           assert(currentSupply! <= max, message: "Can not set max lower than supply")
         }
         ExampleNFT.predefinedMetadata[typeId] = metadata
       }
 
-        // BatchMintNFT for multi edition
+      // BatchMintNFT for multi edition
       // Mints a batch of new NFTs
       // and deposit it in the recipients collection using their collection reference
       //
@@ -478,12 +451,12 @@ pub contract ExampleNFT: NonFungibleToken {
           while index < count {
             self.mintNFT(
               recipient: recipient,
-              name: metadata["name"] as! String,
-              description: metadata["description"] as! String,
-              thumbnail: metadata["thumbnail"] as! String,
-              mediaHash: metadata["mediaHash"] as! String,
-              mediaType: metadata["mediaType"] as! String,
-              royalties: metadata["royalties"] as! [MetadataViews.Royalty],
+              name: "",
+              description: "",
+              thumbnail:  "",
+              mediaHash:  "",
+              mediaType:  "",
+              royalties:  [],
               typeId: typeId,
               metadata: {}
             )
